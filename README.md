@@ -12,9 +12,11 @@ chmod +x books scripts/books
 
 ## Requirements
 
+
 - bash
 - curl
 - jq
+
 
 ## Usage
 
