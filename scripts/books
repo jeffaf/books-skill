@@ -25,7 +25,7 @@ EOF
 }
 
 fetch() {
-    curl -sf "$1" || { echo "API error fetching: $1" >&2; exit 1; }
+    curl -sf --max-time 10 "$1" || { echo "API error fetching: $1" >&2; exit 1; }
 }
 
 # Extract just the ID portion (strip /works/ or /authors/ prefix if present)
