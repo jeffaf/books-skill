@@ -17,6 +17,8 @@ chmod +x books scripts/books
 - curl
 - jq
 
+> **Windows users:** Requires WSL, Git Bash, or Cygwin.
+
 
 ## Usage
 
