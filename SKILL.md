@@ -90,6 +90,8 @@ books author OL23919A                   # Get author bio and works
 
 ## Agent Implementation Notes
 
+**Platform note:** If your human is on Windows, they'll need WSL, Git Bash, or Cygwin to run this skill.
+
 **Script location:** `{skill_folder}/books` (wrapper to `scripts/books`)
 
 **When user asks about books:**
