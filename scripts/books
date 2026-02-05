@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# books - Open Library API CLI for book lookups
+# Usage: books <command> [args]
+
+set -euo pipefail
+
+API="https://openlibrary.org"
+
+usage() {
+    cat <<EOF
+Usage: books <command> [args]
+
+Commands:
+  search <query>    Search books by title/author/keyword
+  info <work_id>    Get book details by Open Library work ID (e.g., OL27448W)
+  author <author_id> Get author info and their works (e.g., OL23919A)
+
+Examples:
+  books search "the name of the wind"
+  books search "author:patrick rothfuss"
+  books info OL27448W
+  books author OL23919A
+EOF
+    exit 1
+}
+
+fetch() {
+    curl -sf "$1" || { echo "API error fetching: $1" >&2; exit 1; }
+}
+
+# Extract just the ID portion (strip /works/ or /authors/ prefix if present)
+clean_id() {
+    echo "$1" | sed -E 's|^/works/||; s|^/authors/||'
+}
+
+format_search() {
+    jq -r '
+        .docs[:15] | .[] |
+        "[\(.key | sub("/works/"; ""))] \(.title)" +
+        (if .author_name then " — \(.author_name[0])" else "" end) +
+        (if .first_publish_year then ", \(.first_publish_year)" else "" end) +
+        (if .ratings_average then ", ⭐ \(.ratings_average | . * 10 | round / 10)" else "" end)
+    '
+}
+
+format_work() {
+    jq -r '
+        "📚 \(.title)\n" +
+        (if .subtitle then "   Subtitle: \(.subtitle)\n" else "" end) +
+        "   Work ID: \(.key | sub("/works/"; ""))\n" +
+        (if .first_publish_date then "   First Published: \(.first_publish_date)\n" else "" end) +
+        (if .subjects then "   Subjects: \([.subjects[:5][]] | join(", "))\n" else "" end) +
+        "\n📖 Description:\n" +
+        (if .description then
+            (if .description | type == "object" then .description.value else .description end)
+        else "No description available." end) +
+        "\n" +
+        (if .covers then "\n🖼️ Cover: https://covers.openlibrary.org/b/id/\(.covers[0])-L.jpg" else "" end)
+    '
+}
+
+format_author() {
+    jq -r '
+        "👤 \(.name)\n" +
+        (if .birth_date then "   Born: \(.birth_date)" else "" end) +
+        (if .death_date then " — Died: \(.death_date)" else "" end) + "\n" +
+        "   Author ID: \(.key | sub("/authors/"; ""))\n" +
+        (if .alternate_names then "   Also known as: \([.alternate_names[:3][]] | join(", "))\n" else "" end) +
+        "\n📖 Bio:\n" +
+        (if .bio then
+            (if .bio | type == "object" then .bio.value else .bio end)
+        else "No biography available." end)
+    '
+}
+
+format_author_works() {
+    jq -r '
+        .entries[:15] | .[] |
+        "[\(.key | sub("/works/"; ""))] \(.title)" +
+        (if .first_publish_year then ", \(.first_publish_year)" else "" end)
+    '
+}
+
+cmd_search() {
+    [[ -z "${1:-}" ]] && { echo "Usage: books search <query>" >&2; exit 1; }
+    local query
+    query=$(printf '%s' "$1" | jq -sRr @uri)
+    fetch "$API/search.json?q=$query&limit=15" | format_search
+}
+
+cmd_info() {
+    [[ -z "${1:-}" ]] && { echo "Usage: books info <work_id>" >&2; exit 1; }
+    local id
+    id=$(clean_id "$1")
+    fetch "$API/works/$id.json" | format_work
+}
+
+cmd_author() {
+    [[ -z "${1:-}" ]] && { echo "Usage: books author <author_id>" >&2; exit 1; }
+    local id
+    id=$(clean_id "$1")
+    
+    echo "=== Author Info ==="
+    fetch "$API/authors/$id.json" | format_author
+    
+    echo ""
+    echo "=== Works ==="
+    fetch "$API/authors/$id/works.json?limit=15" | format_author_works
+}
+
+[[ $# -lt 1 ]] && usage
+
+case "$1" in
+    search)   shift; cmd_search "$@" ;;
+    info)     shift; cmd_info "$@" ;;
+    author)   shift; cmd_author "$@" ;;
+    -h|--help|help) usage ;;
+    *) echo "Unknown command: $1" >&2; usage ;;
+esac
